@@ -49,8 +49,12 @@ using AHRS_StateVector = UKF::StateVector<
     UKF::Field<AngularVelocity, UKF::Vector<3>>
 >;
 
-template <> constexpr real_t UKF::Parameters::AlphaSquared<AHRS_StateVector> = 1e-2;
-template <> constexpr real_t UKF::Parameters::Kappa<AHRS_StateVector> = 3.0;
+namespace UKF {
+namespace Parameters {
+template <> constexpr real_t AlphaSquared<AHRS_StateVector> = 1e-2;
+template <> constexpr real_t Kappa<AHRS_StateVector> = 3.0;
+}
+}
 
 /*
 In addition to the AHRS filter, an online parameter estimation filter is also
@@ -68,8 +72,11 @@ using AHRS_SensorErrorVector = UKF::StateVector<
     UKF::Field<MagneticFieldInclination, real_t>
 >;
 
-template <> constexpr real_t UKF::Parameters::AlphaSquared<AHRS_SensorErrorVector> = 1.0;
-template <> constexpr real_t UKF::Parameters::Kappa<AHRS_SensorErrorVector> = 3.0;
+namespace UKF {
+namespace Parameters {
+template <> constexpr real_t AlphaSquared<AHRS_SensorErrorVector> = 1.0;
+template <> constexpr real_t Kappa<AHRS_SensorErrorVector> = 3.0;
+}
 
 /* AHRS process model. */
 template <> template <>
@@ -87,6 +94,7 @@ AHRS_StateVector AHRS_StateVector::derivative<>() const {
 
     return output;
 }
+}
 
 using AHRS_MeasurementVector = UKF::DynamicMeasurementVector<
     UKF::Field<Accelerometer, UKF::Vector<3>>,
@@ -94,30 +102,7 @@ using AHRS_MeasurementVector = UKF::DynamicMeasurementVector<
     UKF::Field<Magnetometer, UKF::Vector<3>>
 >;
 
-/*
-AHRS measurement model.
-TODO: Work out why we need to put the versions with no inputs arguments in.
-For some reason, if it's not there, we get a strange compilation eroor which
-seems to be the Detail::FieldTypes helper returning 'void' for everything.
-*/
-template <> template <>
-UKF::Vector<3> AHRS_MeasurementVector::expected_measurement
-<AHRS_StateVector, Accelerometer>(const AHRS_StateVector& state) {
-    return state.get_field<Attitude>() * UKF::Vector<3>(0, 0, -G_ACCEL);
-}
-
-template <> template <>
-UKF::Vector<3> AHRS_MeasurementVector::expected_measurement
-<AHRS_StateVector, Gyroscope>(const AHRS_StateVector& state) {
-    return state.get_field<AngularVelocity>();
-}
-
-template <> template <>
-UKF::Vector<3> AHRS_MeasurementVector::expected_measurement
-<AHRS_StateVector, Magnetometer>(const AHRS_StateVector& state) {
-    return state.get_field<Attitude>() * UKF::Vector<3>(MAG_NORM, 0, 0);
-}
-
+namespace UKF {
 /*
 This is the measurement model that's actually used in the filter, because
 it's the one which takes the parameter estimation filter state as an input.
@@ -149,12 +134,15 @@ UKF::Vector<3> AHRS_MeasurementVector::expected_measurement
                 std::sin(std::atan(input.get_field<MagneticFieldInclination>())))).array();
 }
 
+}
+
 using AHRS_Filter = UKF::SquareRootCore<
     AHRS_StateVector,
     AHRS_MeasurementVector,
     UKF::IntegratorHeun
 >;
 
+namespace UKF {
 /*
 AHRS parameter estimation filter process model. Since the evolution of sensor
 errors is by definition unpredictable, this does nothing.
@@ -198,6 +186,8 @@ UKF::Vector<3> AHRS_MeasurementVector::expected_measurement
                 std::sin(std::atan(state.get_field<MagneticFieldInclination>())))).array();
 }
 
+}
+
 /* Just use the Euler integrator since there's no process model. */
 using AHRS_ParameterEstimationFilter = UKF::SquareRootParameterEstimationCore<
     AHRS_SensorErrorVector,
@@ -209,6 +199,7 @@ static AHRS_ParameterEstimationFilter ahrs_errors;
 static AHRS_MeasurementVector meas;
 static UKF::Vector<3> acceleration;
 
+namespace UKF {
 /*
 Set the initial measurement root covariance vector.
 */
@@ -218,6 +209,8 @@ AHRS_MeasurementVector::CovarianceVector AHRS_MeasurementVector::measurement_roo
         0.5 * UKF::Vector<3>::Ones(),
         0.004 * UKF::Vector<3>::Ones(),
         0.1 * UKF::Vector<3>::Ones()).finished());
+
+}
 
 /*
 The following functions provide a ctypes-compatible interface for ease of
